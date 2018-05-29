@@ -13,9 +13,11 @@ FTPClient::FTPClient(boost::shared_ptr<boost::asio::io_service> io_service)
 	: socket(*io_service), service(io_service), uploader(io_service), handler(io_service) {
 }
 
-void FTPClient::connect(boost::asio::ip::tcp::endpoint &ep) {
+void FTPClient::connect(boost::asio::ip::tcp::endpoint &ep, std::string userName, std::string password) {
 	socket.async_connect(ep, boost::bind(&FTPClient::connected, this, error));
 
+	this->userName = userName;
+	this->password = password;
 	pendingCommands = { USER, PASS, TYPE };
 }
 
@@ -197,13 +199,13 @@ void FTPClient::processCommand() {
 		break;
 	}
 	case USER: {
-		resultCommand = "USER";
+		resultCommand = "USER " + userName;
 		std::copy(resultCommand.begin(), resultCommand.end(), wxBuffer.begin());
 		writtenCommands.push(USER);
 		break;
 	}
 	case PASS: {
-		resultCommand = "PASS";
+		resultCommand = "PASS " + password;
 		std::copy(resultCommand.begin(), resultCommand.end(), wxBuffer.begin());
 		writtenCommands.push(PASS);
 		break;
@@ -276,54 +278,107 @@ void FTPClient::ErrorHandler::operator<<(std::pair<int,std::string> CodeMsg) {
 	case 100: {
 
 		boost::asio::deadline_timer timer(*service, boost::posix_time::seconds(5));
-		//timer.async_wait(boost::bind(&FtpConnection::timerHandler, _1));
+		timer.async_wait(boost::bind(&FTPClient::ErrorHandler::timerExpired, this, error));
 		break;
 	}
 	case 110: {
 		//TODO
-
+		break;
 	}
 	case 120: {
-		boost::regex pattern("([0-9]+ )");
+		boost::regex pattern("[a-zA-Z ]*([0-9]+)[a-zA-Z ]*");
 		boost::smatch minutes;
 		boost::regex_match(CodeMsg.second, minutes, pattern);
 
 		boost::asio::deadline_timer timer(*service, boost::posix_time::minutes(boost::lexical_cast<int>(minutes[1])));
-		//timer.async_wait(boost::bind(&FtpConnection::timerHandler, _1));
+		timer.async_wait(boost::bind(&FTPClient::ErrorHandler::timerExpired, this, error));
 		break;
 	}
-	case 332:
-	case 350:
-	case 421:
-	case 425:
-	case 426:
-	case 430:
-	case 434:
-	case 450:
-	case 451:
-	case 452:
-	case 501:
-	case 502:
-	case 503:
-	case 504:
-	case 530: {
-		//pendingCommands.push_back(::USER);
+	case 332: {
+		std::cout << "Need account for login." << std::endl;
 	}
-	case 532:
-	case 534:
-	case 550:
-	case 551:
-	case 552:
-	case 553:
-	case 631:
-	case 632:
-	case 633:
-	case 10054:
-	case 10060:
-	case 10061:
-	case 10066:
-	case 10068:
+	case 350: {
+		std::cout << "Requested file action pending further information" << std::endl;
+	}
+	case 421: {
+		std::cout << "Service not available, closing control connection." << std::endl;
+	}
+	case 425: {
+		std::cout << "Can't open data connection." << std::endl;
+	}
+	case 426: {
+		std::cout << "Connection closed; transfer aborted." << std::endl;
+	}
+	case 430: {
+		std::cout << "Invalid username or password" << std::endl;
+	}
+	case 434: {
+		std::cout << "Requested host unavailable." << std::endl;
+	}
+	case 450: {
+		std::cout << "Requested file action not taken." << std::endl;
+	}
+	case 451: {
+		std::cout << "Requested action aborted. Local error in processing." << std::endl;
+	}
+	case 452: {
+		std::cout << "	Requested action not taken. Insufficient storage space in system.File unavailable." << std::endl;
+	}
+	case 501: {
+		std::cout << "Syntax error in parameters or arguments." << std::endl;
+	}
+	case 502: {
+		std::cout << "Command not implemented." << std::endl;
+	}
+	case 503: {
+		std::cout << "Bad sequence of commands." <<std::endl;
+	}
+	case 504: {
+		std::cout << "Command not implemented for that parameter." << std::endl;
+	}
+	case 530: {
+		std::cout << "Not logged in." << std::endl;
+	}
+	case 532: {
+		std::cout << "Need account for storing files." << std::endl;
+	}
+	case 534: {
+		std::cout << "Could Not Connect to Server - Policy Requires SSL" << std::endl;
+	}
+	case 550: {
+		std::cout << "Requested action not taken. File unavailable (e.g., file not found, no access)." <<std::endl;
+	}
+	case 551: {
+		std::cout << "Requested action aborted. Page type unknown." << std::endl;
+	}
+	case 552: {
+		std::cout << "Requested file action aborted. Exceeded storage allocation (for current directory or dataset)." << std::endl;
+	}
+	case 553: {
+		std::cout << "Requested action not taken. File name not allowed." << std::endl;
+	}
+	case 10054: {
+		std::cout << "Connection reset by peer. The connection was forcibly closed by the remote host." << std::endl;
+	}
+	case 10060: {
+		std::cout << "Cannot connect to remote server." << std::endl;
+	}
+	case 10061: {
+		std::cout << "Cannot connect to remote server. The connection is actively refused by the server." << std::endl;
+	}
+	case 10066: {
+		std::cout << "Directory not empty." << std::endl;
+	}
+	case 10068: {
+		std::cout << "Too many users, server is full." << std::endl;
+	}
 	default:
 		break;
+	}
+}
+
+void FTPClient::ErrorHandler::timerExpired(const boost::system::error_code & error){
+	if (error) {
+		return;
 	}
 }

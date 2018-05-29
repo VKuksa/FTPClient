@@ -37,6 +37,8 @@ class FTPClient
 		void operator<<(std::pair<int,std::string> CodeMsg);
 
 	private:
+		void timerExpired(const boost::system::error_code &error);
+
 		boost::shared_ptr<boost::asio::io_service> service;
 	};
 
@@ -62,7 +64,7 @@ class FTPClient
 public:
 	explicit FTPClient(boost::shared_ptr<boost::asio::io_service> io_service);
 	
-	void connect(boost::asio::ip::tcp::endpoint &ep);
+	void connect(boost::asio::ip::tcp::endpoint &ep, std::string userName, std::string password);
 
 	void changeWorkingDirectory(std::string dirName);
 
@@ -95,10 +97,14 @@ private:
 	std::string currentDirectoryName;
 	std::string passiveAddr;
 	std::string passivePort;
+	std::string userName;
+	std::string password;
 
 	std::deque<WritingCommands> pendingCommands;
 	std::stack<WritingCommands> writtenCommands;
 
 	std::array<char, 512> wxBuffer;
 	std::array<char, 512> rxBuffer;
+
+	friend class ErrorHandler;
 };
