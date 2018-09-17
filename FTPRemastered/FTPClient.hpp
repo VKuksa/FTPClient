@@ -4,8 +4,8 @@
 #include <string>
 #include <iostream>
 
-namespace adpm { namespace agent{
-		class FtpClient {
+namespace ftp{
+		class Client {
 	public:
 		enum Command {
 			DELE,			//Delete file
@@ -27,7 +27,7 @@ namespace adpm { namespace agent{
 			PASS			//Password
 		};
 
-		explicit FtpClient(boost::asio::io_service &io_service);
+		explicit Client(boost::asio::io_service &io_service);
 
 		void connect(const std::string &address, const std::string &userName, const std::string &password);
 
@@ -35,7 +35,7 @@ namespace adpm { namespace agent{
 
 		void uploadFile(const std::string &uploadFileName);
 
-		~FtpClient();
+		~Client();
 
 	private:
 		class ErrorHandler {
