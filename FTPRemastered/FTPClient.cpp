@@ -9,15 +9,15 @@
 
 using boost::asio::placeholders::error;
 
-namespace adpm { namespace agent {
-		FtpClient::FtpClient(boost::asio::io_service &io_service)
+namespace ftp {
+		Client::Client(boost::asio::io_service &io_service)
 			: socket(io_service), service(io_service), uploader(io_service), handler(io_service), resolver(io_service) {
 		}
 
-		void FtpClient::connect(const std::string &address, const std::string &userName, const std::string &password) {
+		void Client::connect(const std::string &address, const std::string &userName, const std::string &password) {
 			boost::asio::ip::tcp::resolver::query query(address, "21");
 
-			resolver.async_resolve(query, boost::bind(&FtpClient::addressResolved, this, error, boost::asio::placeholders::iterator));
+			resolver.async_resolve(query, boost::bind(&Client::addressResolved, this, error, boost::asio::placeholders::iterator));
 
 			pendingCommands.push_back(std::make_pair(USER, userName));
 			pendingCommands.push_back(std::make_pair(PASS, password));
@@ -25,29 +25,29 @@ namespace adpm { namespace agent {
 			current = USER;
 		}
 
-		void FtpClient::addressResolved(const boost::system::error_code &error, boost::asio::ip::tcp::resolver::iterator iterator) {
+		void Client::addressResolved(const boost::system::error_code &error, boost::asio::ip::tcp::resolver::iterator iterator) {
 			if (!error) {
-				socket.async_connect(*iterator, boost::bind(&FtpClient::connected, this, error));
+				socket.async_connect(*iterator, boost::bind(&Client::connected, this, error));
 			}
 		}
 
-		void FtpClient::connected(const boost::system::error_code &error) {
+		void Client::connected(const boost::system::error_code &error) {
 			if (!error) {
 				readAsync();
 			}
 		}
 
-		void FtpClient::changeWorkingDirectory(const std::string &dirName) {
+		void Client::changeWorkingDirectory(const std::string &dirName) {
 			pendingCommands.push_back(std::make_pair(CWD, dirName));
 		}
 
-		void FtpClient::uploadFile(const std::string &uploadFileName) {
+		void Client::uploadFile(const std::string &uploadFileName) {
 			pendingCommands.push_back(std::make_pair(PASV, ""));
 
 			uploader.setFileName(uploadFileName);
 		}
 
-		void FtpClient::dataReceived(const boost::system::error_code &error, std::size_t bytes) {
+		void Client::dataReceived(const boost::system::error_code &error, std::size_t bytes) {
 			if (!error) {
 				readAsync();
 
@@ -127,25 +127,25 @@ namespace adpm { namespace agent {
 			}
 		}
 
-		void FtpClient::dataWritten(const boost::system::error_code &error) {
+		void Client::dataWritten(const boost::system::error_code &error) {
 			if (error) {
 				return;
 			}
 		}
 
-		void FtpClient::readAsync() {
+		void Client::readAsync() {
 			socket.async_read_some(
 				boost::asio::buffer(rxBuffer, sizeof(rxBuffer)),
-				boost::bind(&FtpClient::dataReceived, this, error, boost::asio::placeholders::bytes_transferred)
+				boost::bind(&Client::dataReceived, this, error, boost::asio::placeholders::bytes_transferred)
 			);
 		}
 
-		void FtpClient::writeAsync() {
+		void Client::writeAsync() {
 			socket.async_send(boost::asio::buffer(wxBuffer.data(), wxBuffer.size()),
-				boost::bind(&FtpClient::dataWritten, this, error));
+				boost::bind(&Client::dataWritten, this, error));
 		}
 
-		void FtpClient::processCommand() {
+		void Client::processCommand() {
 			if (!pendingCommands.empty()) {
 				std::string resultCommand = commandToString(pendingCommands.front().first) + " " + pendingCommands.front().second;
 				wxBuffer.fill(0);
@@ -219,7 +219,7 @@ namespace adpm { namespace agent {
 			}
 		}
 
-		std::string FtpClient::commandToString(Command cmd)
+		std::string Client::commandToString(Command cmd)
 		{
 			switch (cmd) {
 			case DELE: return "DELE";
@@ -243,35 +243,35 @@ namespace adpm { namespace agent {
 			}
 		}
 
-		void FtpClient::createPassiveConnection(const std::string &passiveAddr, const std::string &passivePort) {
+		void Client::createPassiveConnection(const std::string &passiveAddr, const std::string &passivePort) {
 			pendingCommands.push_back(std::make_pair<Command, const std::string>(STOR, uploader.getFileName()));
 
 			boost::asio::ip::tcp::endpoint ep(boost::asio::ip::address::from_string(passiveAddr), std::stoi(passivePort));
 			uploader.loadFileTo(ep);
 		}
 
-		FtpClient::~FtpClient() {
+		Client::~Client() {
 			if (socket.is_open())
 				socket.close();
 		}
 
-		FtpClient::FileUploader::FileUploader(boost::asio::io_service &io_service)
+		Client::FileUploader::FileUploader(boost::asio::io_service &io_service)
 			:socket(io_service) {
 		}
 
-		void FtpClient::FileUploader::setFileName(const std::string & fileName) {
+		void Client::FileUploader::setFileName(const std::string & fileName) {
 			this->fileName = fileName;
 		}
 
-		std::string FtpClient::FileUploader::getFileName() const {
+		std::string Client::FileUploader::getFileName() const {
 			return fileName;
 		}
 
-		void FtpClient::FileUploader::loadFileTo(boost::asio::ip::tcp::endpoint ep) {
-			socket.async_connect(ep, boost::bind(&FtpClient::FileUploader::connected, this, error));
+		void Client::FileUploader::loadFileTo(boost::asio::ip::tcp::endpoint ep) {
+			socket.async_connect(ep, boost::bind(&Client::FileUploader::connected, this, error));
 		}
 
-		void FtpClient::FileUploader::connected(const boost::system::error_code & error) {
+		void Client::FileUploader::connected(const boost::system::error_code & error) {
 			if (!error) {
 				std::ifstream is(fileName.c_str(), std::ios::in | std::ios::binary);
 				char buf[512];
@@ -280,26 +280,26 @@ namespace adpm { namespace agent {
 					reply.append(buf, is.gcount());
 
 				socket.async_send(boost::asio::buffer(reply, reply.size()),
-					boost::bind(&FtpClient::FileUploader::fileUploaded, this, error));
+					boost::bind(Client::FileUploader::fileUploaded, this, error));
 			}
 		}
 
-		void FtpClient::FileUploader::fileUploaded(const boost::system::error_code & error) {
+		void Client::FileUploader::fileUploaded(const boost::system::error_code & error) {
 			if (!error) {
 				socket.close();
 			}
 		}
 
 
-		FtpClient::ErrorHandler::ErrorHandler(boost::asio::io_service & io_service) :service(service) {
+		Client::ErrorHandler::ErrorHandler(boost::asio::io_service & io_service) :service(service) {
 		}
 
-		void FtpClient::ErrorHandler::operator<<(std::pair<int, std::string> CodeMsg) {
+		void Client::ErrorHandler::operator<<(std::pair<int, std::string> CodeMsg) {
 			switch (CodeMsg.first) {
 			case 100: {
 
 				boost::asio::deadline_timer timer(*service, boost::posix_time::seconds(5));
-				timer.async_wait(boost::bind(&FtpClient::ErrorHandler::timerExpired, this, error));
+				timer.async_wait(boost::bind(&Client::ErrorHandler::timerExpired, this, error));
 				break;
 			}
 			case 110: {
@@ -312,7 +312,7 @@ namespace adpm { namespace agent {
 				boost::regex_match(CodeMsg.second, minutes, pattern);
 
 				boost::asio::deadline_timer timer(*service, boost::posix_time::minutes(boost::lexical_cast<int>(minutes[1])));
-				timer.async_wait(boost::bind(&FtpClient::ErrorHandler::timerExpired, this, error));
+				timer.async_wait(boost::bind(&Client::ErrorHandler::timerExpired, this, error));
 				break;
 			}
 			case 332: {
@@ -398,7 +398,7 @@ namespace adpm { namespace agent {
 			}
 		}
 
-		void FtpClient::ErrorHandler::timerExpired(const boost::system::error_code & error) {
+		void Client::ErrorHandler::timerExpired(const boost::system::error_code & error) {
 			if (error) {
 				std::cout << "Timer haven't worked properly" << std::endl;
 				return;
